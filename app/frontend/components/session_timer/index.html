@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Plus Jakarta Sans", sans-serif; }
+    .session-card {
+      width: 100%; min-height: 68px; padding: 9px 11px;
+      border: 1px solid #dce6e4; border-left: 3px solid #087e8b;
+      border-radius: 8px; background: #fff; color: #142b2d;
+    }
+    .session-label {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+      color: #087e8b; font-size: 10px; font-weight: 800; letter-spacing: .08em;
+    }
+    .session-dot { width: 7px; height: 7px; border-radius: 50%; background: #1d8b68; }
+    .session-time { font-size: 17px; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .session-card.expired { border-left-color: #c74440; }
+    .session-card.expired .session-label, .session-card.expired .session-dot { color: #a62e2e; background: #c74440; }
+  </style>
+</head>
+<body>
+  <div class="session-card" id="session-card" role="status" aria-live="polite">
+    <div class="session-label"><span class="session-dot"></span>SECURE SESSION</div>
+    <div class="session-time" id="session-time">15:00 remaining</div>
+  </div>
+  <script>
+    const card = document.getElementById("session-card");
+    const display = document.getElementById("session-time");
+    let expiresAt = 0;
+    let expirySent = false;
+
+    function send(type, values = {}) {
+      window.parent.postMessage({ isStreamlitMessage: true, type, ...values }, "*");
+    }
+
+    function updateCountdown() {
+      if (!expiresAt) return;
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      const minutes = Math.floor(remaining / 60).toString().padStart(2, "0");
+      const seconds = (remaining % 60).toString().padStart(2, "0");
+      display.textContent = `${minutes}:${seconds} remaining`;
+      if (remaining === 0) {
+        card.classList.add("expired");
+        if (!expirySent) {
+          expirySent = true;
+          send("streamlit:setComponentValue", { value: "expired", dataType: "json" });
+        }
+      }
+    }
+
+    window.addEventListener("message", event => {
+      const message = event.data;
+      if (!message || message.type !== "streamlit:render") return;
+      expiresAt = Number(message.args.expires_at_ms || 0);
+      expirySent = false;
+      card.classList.remove("expired");
+      updateCountdown();
+    });
+
+    send("streamlit:componentReady", { apiVersion: 1 });
+    send("streamlit:setFrameHeight", { height: 72 });
+    window.setInterval(updateCountdown, 250);
+  </script>
+</body>
+</html>
